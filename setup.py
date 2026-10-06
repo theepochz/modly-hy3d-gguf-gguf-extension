@@ -1,5 +1,5 @@
 """
-Trellis.2 GGUF — extension setup script.
+hy3d_gguf — extension setup script.
 
 Creates an isolated venv and installs all required dependencies:
   - PyTorch (version selected by GPU SM / CUDA driver)
@@ -7,7 +7,7 @@ Creates an isolated venv and installs all required dependencies:
       cumesh, flex-gemm (required); nvdiffrast, o-voxel (optional)
   - triton-windows (Windows only)
   - Python packages from requirements (gguf, meshlib, rembg, trimesh, …)
-  - trellis2_gguf source package (from ComfyUI-Trellis2-GGUF GitHub)
+  - hy3dgguf source package (from ComfyUI-Trellis2-GGUF GitHub)
   - Patches: flexible_dual_grid.py, remeshing.py
 
 Called by Modly at extension install time with:
@@ -286,25 +286,25 @@ def _install_triton_windows(venv: Path, torch_ver: str, gpu_sm: int = 0) -> None
 
 
 # --------------------------------------------------------------------------- #
-# trellis2_gguf source                                                         #
+# hy3dgguf source                                                         #
 # --------------------------------------------------------------------------- #
 
-def _install_trellis2_gguf(venv: Path) -> None:
+def _install_hy3dgguf(venv: Path) -> None:
     """
     Download ComfyUI-Trellis2-GGUF from GitHub and extract:
-      - trellis2_gguf/   -> site-packages/trellis2_gguf/
-      - patch/           -> site-packages/trellis2_gguf_patch/
+      - hy3dgguf/   -> site-packages/hy3dgguf/
+      - patch/           -> site-packages/hy3dgguf_patch/
 
     Also applies the patches to the corresponding installed packages
-    (flexible_dual_grid.py in spconv, remeshing.py in trellis2_gguf).
+    (flexible_dual_grid.py in spconv, remeshing.py in hy3dgguf).
     """
     sp    = _site_packages(venv)
-    dest  = sp / "trellis2_gguf"
+    dest  = sp / "hy3dgguf"
 
     if dest.exists():
         # Don't re-download, but still ensure the standalone GGUF fallback patch is
         # applied (idempotent) so an existing install gets fixed on the next Repair.
-        print("[setup] trellis2_gguf already installed; ensuring GGUF fallback patch.")
+        print("[setup] hy3dgguf already installed; ensuring GGUF fallback patch.")
         _patch_gguf_fallback_linear(sp)
         return
 
@@ -313,18 +313,18 @@ def _install_trellis2_gguf(venv: Path) -> None:
         with urllib.request.urlopen(_COMFYUI_TRELLIS2_ZIP, timeout=300) as resp:
             data = resp.read()
     except Exception as exc:
-        raise RuntimeError(f"[setup] Could not download trellis2_gguf source: {exc}") from exc
+        raise RuntimeError(f"[setup] Could not download hy3dgguf source: {exc}") from exc
 
     zip_root = "ComfyUI-Trellis2-GGUF-main/"
-    pkg_prefix   = f"{zip_root}trellis2_gguf/"
+    pkg_prefix   = f"{zip_root}hy3dgguf/"
     patch_prefix = f"{zip_root}patch/"
 
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
-        # ── trellis2_gguf package ──────────────────────────────────────── #
+        # ── hy3dgguf package ──────────────────────────────────────── #
         for member in zf.namelist():
             if not member.startswith(pkg_prefix):
                 continue
-            rel    = member[len(zip_root):]          # "trellis2_gguf/..."
+            rel    = member[len(zip_root):]          # "hy3dgguf/..."
             target = sp / rel
             if member.endswith("/"):
                 target.mkdir(parents=True, exist_ok=True)
@@ -333,7 +333,7 @@ def _install_trellis2_gguf(venv: Path) -> None:
                 target.write_bytes(zf.read(member))
 
         # ── patch files ────────────────────────────────────────────────── #
-        patch_dest = sp / "trellis2_gguf_patch"
+        patch_dest = sp / "hy3dgguf_patch"
         for member in zf.namelist():
             if not member.startswith(patch_prefix):
                 continue
@@ -344,10 +344,10 @@ def _install_trellis2_gguf(venv: Path) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(zf.read(member))
 
-    print(f"[setup] trellis2_gguf installed to {sp}.")
+    print(f"[setup] hy3dgguf installed to {sp}.")
 
     # ── Fix the standalone GGUF fallback Linear ────────────────────────── #
-    # Without ComfyUI, city96's GGUF ops can't import `comfy`, so trellis2_gguf
+    # Without ComfyUI, city96's GGUF ops can't import `comfy`, so hy3dgguf
     # falls back to GGMLOpsFallback.Linear. Upstream that fallback is a bare
     # nn.Module, so GGMLSparseLinear loses GGMLLayer's _load_from_state_dict and
     # the quantized (e.g. Q8_0) weights crash in load_state_dict's copy_().
@@ -364,7 +364,7 @@ def _patch_gguf_fallback_linear(sp: Path) -> None:
     (non-ComfyUI) environment. Targeted, idempotent, and fails loudly if upstream
     structure changed (so Repair surfaces it instead of shipping a silent crash).
     """
-    target = sp / "trellis2_gguf" / "utils" / "gguf_utils.py"
+    target = sp / "hy3dgguf" / "utils" / "gguf_utils.py"
     if not target.exists():
         raise RuntimeError(f"[setup] expected {target} after install, not found.")
 
@@ -403,13 +403,13 @@ def _patch_gguf_fallback_linear(sp: Path) -> None:
 def _install_comfyui_gguf(venv: Path) -> None:
     """
     Download ops.py / dequant.py / loader.py from city96/ComfyUI-GGUF into the
-    path that trellis2_gguf's _setup_native_gguf() searches:
+    path that hy3dgguf's _setup_native_gguf() searches:
       <site-packages>/../ComfyUI-GGUF/
     Without these files the GGUF dequant falls back to a CPU implementation.
     """
     sp       = _site_packages(venv)
     # The search path is relative to the installed package
-    # (trellis2_gguf/utils/../../../ComfyUI-GGUF), so it must be derived from
+    # (hy3dgguf/utils/../../../ComfyUI-GGUF), so it must be derived from
     # site-packages: hardcoding <venv>/Lib works on Windows but not on Linux,
     # where site-packages lives under <venv>/lib/pythonX.Y/.
     gguf_dir = sp.parent / "ComfyUI-GGUF"
@@ -441,7 +441,7 @@ def _apply_patches(sp: Path, patch_dir: Path) -> None:
 
     Known patches:
       flexible_dual_grid.py -> overwrites the same file inside spconv/modules/
-      remeshing.py          -> overwrites the same file inside trellis2_gguf/
+      remeshing.py          -> overwrites the same file inside hy3dgguf/
     """
     if not patch_dir.exists():
         return
@@ -449,7 +449,7 @@ def _apply_patches(sp: Path, patch_dir: Path) -> None:
     patch_map = {
         "flexible_dual_grid.py": _find_in_site(sp, "flexible_dual_grid.py"),
         # Exclude cumesh/remeshing.py — cumesh ships its own correct version;
-        # overwriting it with the trellis2_gguf patch breaks cumesh remesh.
+        # overwriting it with the hy3dgguf patch breaks cumesh remesh.
         "remeshing.py": [p for p in _find_in_site(sp, "remeshing.py")
                          if "cumesh" not in p.parts],
     }
@@ -479,7 +479,7 @@ def _patch_o_voxel_tiled_fdg(sp: Path) -> None:
     Idempotent; safe to run on every Repair.
     """
     target = sp / "o_voxel" / "convert" / "__init__.py"
-    patch  = sp / "trellis2_gguf_patch" / "flexible_dual_grid.py"
+    patch  = sp / "hy3dgguf_patch" / "flexible_dual_grid.py"
 
     if not target.exists() or not patch.exists():
         return
@@ -522,7 +522,7 @@ def _patch_o_voxel_tiled_fdg(sp: Path) -> None:
                 prefix = ("\n" + "\n".join(extra_imports)) if extra_imports else ""
 
                 target.write_text(
-                    existing + prefix + "\n\n# ---- trellis2_gguf patch ----\n" + func_src + "\n",
+                    existing + prefix + "\n\n# ---- hy3dgguf patch ----\n" + func_src + "\n",
                     encoding="utf-8",
                 )
                 print("[setup] Patched o_voxel/convert/__init__.py with tiled_flexible_dual_grid_to_mesh")
@@ -597,15 +597,15 @@ def setup(python_exe: str, ext_dir: Path, gpu_sm: int, cuda_version: int = 0) ->
     if torch_ver:
         _install_triton_windows(venv, torch_ver, gpu_sm)
 
-    # ── trellis2_gguf source ──────────────────────────────────────────── #
-    _install_trellis2_gguf(venv)
+    # ── hy3dgguf source ──────────────────────────────────────────── #
+    _install_hy3dgguf(venv)
 
     # ── ComfyUI-GGUF (city96) — native GGUF dequant on GPU ───────────── #
     _install_comfyui_gguf(venv)
 
     # ── Patch o_voxel.convert with tiled_flexible_dual_grid_to_mesh ───── #
     # Runs on every install AND repair (idempotent) so the function is
-    # always available even when _install_trellis2_gguf is skipped.
+    # always available even when _install_hy3dgguf is skipped.
     _patch_o_voxel_tiled_fdg(_site_packages(venv))
 
     print("[setup] Done. Venv ready at:", venv)
