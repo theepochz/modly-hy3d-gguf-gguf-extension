@@ -1,8 +1,8 @@
 """
-Trellis.2 GGUF extension for Modly.
+hy3d_gguf extension for Modly.
 
-Model   : https://huggingface.co/Aero-Ex/Trellis2-GGUF
-Wrapper : https://github.com/Aero-Ex/ComfyUI-Trellis2-GGUF
+Model   : https://huggingface.co/Aero-Ex/hy3dgguf-GGUF
+Wrapper : https://github.com/Aero-Ex/ComfyUI-hy3dgguf-GGUF
 
 Single Generate node : image -> geometry GLB.
 
@@ -12,7 +12,7 @@ Pipeline stages:
   3. Shape SLaT diffusion        (slat_steps)
   4. Geometry export via cumesh remesh -> GLB
 
-Model weights are downloaded once to <models>/trellis2/generate/ and reused.
+Model weights are downloaded once to <models>/hy3dgguf/generate/ and reused.
 """
 from __future__ import annotations
 
@@ -29,14 +29,14 @@ from services.generators.base import BaseGenerator, smooth_progress, GenerationC
 
 _EXTENSION_DIR = Path(__file__).parent
 
-# Attention backend: trellis2_gguf defaults to 'flash_attn', which we don't ship
+# Attention backend: hy3dgguf_gguf defaults to 'flash_attn', which we don't ship
 # (no prebuilt flash-attn wheel for Windows). Force PyTorch's native SDPA — read by
-# attention/config.py at import time, so it must be set before any trellis2_gguf import.
+# attention/config.py at import time, so it must be set before any hy3dgguf_gguf import.
 import os as _os_env
 _os_env.environ.setdefault("ATTN_BACKEND", "sdpa")
 
 # HuggingFace model repo
-_HF_REPO = "Aero-Ex/Trellis2-GGUF"
+_HF_REPO = "Aero-Ex/hy3dgguf-GGUF"
 
 # Files to download: all GGUF variants + JSON configs + Vision encoder + decoders/encoders
 # (skip BF16/FP8 safetensors which add ~80 GB to the download)
@@ -75,9 +75,9 @@ _SLAT_RESCALE_T    = 4.0
 _MAX_NUM_TOKENS    = 150000
 
 
-class Trellis2GGUFGenerator(BaseGenerator):
-    MODEL_ID     = "trellis2"
-    DISPLAY_NAME = "Trellis.2 GGUF"
+class hy3dggufGGUFGenerator(BaseGenerator):
+    MODEL_ID     = "hy3dgguf"
+    DISPLAY_NAME = "hy3d_gguf"
     VRAM_GB      = 8
 
     # ------------------------------------------------------------------ #
@@ -87,8 +87,8 @@ class Trellis2GGUFGenerator(BaseGenerator):
     @property
     def _weights_dir(self) -> Path:
         """
-        model_dir = <models>/trellis2/{generate|refine}
-        weights   = <models>/trellis2/  (one level up)
+        model_dir = <models>/hy3dgguf/{generate|refine}
+        weights   = <models>/hy3dgguf/  (one level up)
         """
         if self.model_dir.name in ("generate", "refine"):
             return self.model_dir.parent
@@ -111,15 +111,15 @@ class Trellis2GGUFGenerator(BaseGenerator):
 
         token = os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HF_TOKEN") or None
 
-        print(f"[Trellis2GGUFGenerator] Downloading {repo} -> {target} ...")
-        print("[Trellis2GGUFGenerator] (Only GGUF weights + config files, ~3-8 GB depending on quantisations.)")
+        print(f"[hy3dggufGGUFGenerator] Downloading {repo} -> {target} ...")
+        print("[hy3dggufGGUFGenerator] (Only GGUF weights + config files, ~3-8 GB depending on quantisations.)")
         snapshot_download(
             repo_id=repo,
             local_dir=str(target),
             allow_patterns=_HF_ALLOW_PATTERNS,
             token=token,
         )
-        print("[Trellis2GGUFGenerator] Download complete.")
+        print("[hy3dggufGGUFGenerator] Download complete.")
 
     # ------------------------------------------------------------------ #
     # Load / Unload                                                       #
@@ -156,7 +156,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         sp_str = str(sp)
         if sp_str not in sys.path:
             sys.path.insert(0, sp_str)
-            print(f"[Trellis2GGUFGenerator] Added venv site-packages to sys.path: {sp_str}")
+            print(f"[hy3dggufGGUFGenerator] Added venv site-packages to sys.path: {sp_str}")
 
     def load(self) -> None:
         if self._model is not None:
@@ -167,7 +167,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         if not self.is_downloaded():
             self._auto_download()
 
-        self._ensure_trellis2_gguf()
+        self._ensure_hy3dgguf_gguf()
 
         # gguf_quant is not available at load time (no UI params yet),
         # so default to Q5_K_M.  generate() will reload if the user
@@ -232,7 +232,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 "transformers_version": "5.2.0",
             }
             config_json.write_text(json.dumps(cfg, indent=2))
-            print(f"[Trellis2] Wrote DINOv3 config.json to {vision_dir}")
+            print(f"[hy3dgguf] Wrote DINOv3 config.json to {vision_dir}")
 
         return str(vision_dir)
 
@@ -341,7 +341,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         if sm_major < 12:
             return
 
-        print(f"[Trellis2] Blackwell GPU detected (SM {sm_major}.{sm_minor}).")
+        print(f"[hy3dgguf] Blackwell GPU detected (SM {sm_major}.{sm_minor}).")
 
         # ── 0. Detect stale cu126 wheels installed before Blackwell support ── #
         # Wheels compiled against CUDA 12.6 lack SM 12.x kernels.  They will crash
@@ -354,7 +354,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
                     _ver = _meta.version(_pkg)
                     if "cu126" in _ver:
                         raise RuntimeError(
-                            f"[Trellis2] {_pkg} {_ver} was compiled for CUDA 12.6 and does not "
+                            f"[hy3dgguf] {_pkg} {_ver} was compiled for CUDA 12.6 and does not "
                             f"support SM 12.x (Blackwell). "
                             f"Click Repair on the Models page to reinstall with CUDA 12.8 wheels."
                         )
@@ -372,20 +372,20 @@ class Trellis2GGUFGenerator(BaseGenerator):
             ptxas = self._find_system_ptxas(min_cuda_ver=(12, 8))
             if ptxas:
                 _os.environ["TRITON_PTXAS_PATH"] = ptxas
-                print(f"[Trellis2] Blackwell: TRITON_PTXAS_PATH={ptxas}")
+                print(f"[hy3dgguf] Blackwell: TRITON_PTXAS_PATH={ptxas}")
             else:
                 # Also log any ptxas that were found but are too old (diagnostic help)
                 old_ptxas = self._find_system_ptxas(min_cuda_ver=(0, 0))
                 if old_ptxas:
-                    print(f"[Trellis2] Blackwell: found ptxas at '{old_ptxas}' but it is "
+                    print(f"[hy3dgguf] Blackwell: found ptxas at '{old_ptxas}' but it is "
                           "older than 12.8 and does not support SM 12.x. "
                           "Install CUDA Toolkit 12.8+ for native Blackwell support.")
                 else:
-                    print("[Trellis2] Blackwell: no ptxas found anywhere (CUDA Toolkit, "
+                    print("[hy3dgguf] Blackwell: no ptxas found anywhere (CUDA Toolkit, "
                           "CUDA_PATH, or triton-windows package). "
                           "Install CUDA Toolkit 12.8+ for native Blackwell support.")
         else:
-            print(f"[Trellis2] Blackwell: TRITON_PTXAS_PATH already set to "
+            print(f"[hy3dgguf] Blackwell: TRITON_PTXAS_PATH already set to "
                   f"{_os.environ['TRITON_PTXAS_PATH']}")
 
         # ── 1b. Isolate Triton kernel cache for Blackwell ─────────────────── #
@@ -399,9 +399,9 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 _bw_cache = Path(_os.path.expanduser("~")) / ".triton" / "cache-sm120"
                 _bw_cache.mkdir(parents=True, exist_ok=True)
                 _os.environ["TRITON_CACHE_DIR"] = str(_bw_cache)
-                print(f"[Trellis2] Blackwell: TRITON_CACHE_DIR={_bw_cache}")
+                print(f"[hy3dgguf] Blackwell: TRITON_CACHE_DIR={_bw_cache}")
             except Exception as _ce:
-                print(f"[Trellis2] Blackwell: could not set TRITON_CACHE_DIR ({_ce}).")
+                print(f"[hy3dgguf] Blackwell: could not set TRITON_CACHE_DIR ({_ce}).")
 
         # ── 1c. Disable spconv / cumm NVRTC JIT ──────────────────────────── #
         # spconv and cumm JIT-compile CUDA kernels via NVRTC on first use.
@@ -411,7 +411,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         # recompiles it for SM 12.0 transparently.  Disabling JIT forces that path.
         _os.environ.setdefault("SPCONV_DISABLE_JIT", "1")
         _os.environ.setdefault("CUMM_DISABLE_JIT", "1")
-        print("[Trellis2] Blackwell: SPCONV_DISABLE_JIT=1, CUMM_DISABLE_JIT=1")
+        print("[hy3dgguf] Blackwell: SPCONV_DISABLE_JIT=1, CUMM_DISABLE_JIT=1")
 
         # ── 1e. Triton ptx_get_version shim for CUDA 13.x ─────────────────── #
         # triton-windows 3.3.x raises RuntimeError for any CUDA version it doesn't
@@ -431,9 +431,9 @@ class Trellis2GGUFGenerator(BaseGenerator):
 
                 _tnc_bw.ptx_get_version           = _ptx_get_compat
                 _tnc_bw._cuda13x_compat_patched    = True
-                print("[Trellis2] Blackwell: patched triton ptx_get_version (CUDA 13.x compat)")
+                print("[hy3dgguf] Blackwell: patched triton ptx_get_version (CUDA 13.x compat)")
         except Exception as _e_ptx:
-            print(f"[Trellis2] Blackwell: triton ptx_get_version patch failed ({_e_ptx})")
+            print(f"[hy3dgguf] Blackwell: triton ptx_get_version patch failed ({_e_ptx})")
 
         # ── 1d. spconv bfloat16 → float16 cast ───────────────────────────── #
         # The pipeline loads in bfloat16 (precision="bf16").  spconv's C++ kernel
@@ -445,7 +445,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         try:
             import importlib as _imp_bw
             _spconv_mod = _imp_bw.import_module(
-                "trellis2_gguf.modules.sparse.conv.conv_spconv"
+                "hy3dgguf_gguf.modules.sparse.conv.conv_spconv"
             )
             if not getattr(_spconv_mod, "_blackwell_bf16_patched", False):
                 _orig_conv_fwd  = _spconv_mod.sparse_conv3d_forward
@@ -472,23 +472,23 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 _spconv_mod.sparse_conv3d_forward         = _bw_conv_fwd
                 _spconv_mod.sparse_inverse_conv3d_forward = _bw_inv_fwd
                 _spconv_mod._blackwell_bf16_patched        = True
-                print("[Trellis2] Blackwell: patched spconv bfloat16 → float16")
+                print("[hy3dgguf] Blackwell: patched spconv bfloat16 → float16")
         except Exception as _e_bf:
-            print(f"[Trellis2] Blackwell: spconv bfloat16 patch skipped ({_e_bf})")
+            print(f"[hy3dgguf] Blackwell: spconv bfloat16 patch skipped ({_e_bf})")
 
         # ── 2. Try non-Triton sparse-conv backend ─────────────────────────── #
         try:
-            import trellis2_gguf.modules.sparse.conv.conv as _conv_mod
-            import trellis2_gguf.config as _t2cfg
+            import hy3dgguf_gguf.modules.sparse.conv.conv as _conv_mod
+            import hy3dgguf_gguf.config as _t2cfg
             current = getattr(_t2cfg, "CONV", "flex_gemm")
             alts = [k for k in getattr(_conv_mod, "_backends", {}) if k != current]
             if alts:
                 _t2cfg.CONV = alts[0]
-                print(f"[Trellis2] Blackwell: switched sparse-conv backend "
+                print(f"[hy3dgguf] Blackwell: switched sparse-conv backend "
                       f"'{current}' -> '{alts[0]}'")
                 return
         except Exception as _e:
-            print(f"[Trellis2] Blackwell: backend switch unavailable ({_e}).")
+            print(f"[hy3dgguf] Blackwell: backend switch unavailable ({_e}).")
 
         # ── 2b. Auto-upgrade triton-windows if it predates Blackwell support ── #
         # Only needed when no working ptxas was found in step 1.
@@ -497,7 +497,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         # The SM-spoof workaround (downgrading to SM 9.0) doesn't help either:
         # SM 9.0 cubins are not forward-compatible with SM 12.x hardware.
         # Upgrade the package inside the extension venv right now, before
-        # trellis2_gguf is imported, so the fresh triton is picked up by flex_gemm's
+        # hy3dgguf_gguf is imported, so the fresh triton is picked up by flex_gemm's
         # module-level @triton.autotune decorators.
         if "TRITON_PTXAS_PATH" not in _os.environ:
             try:
@@ -506,7 +506,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 _m2 = _re2.match(r"(\d+)\.(\d+)\.(\d+)", _triton_chk.__version__)
                 if _m2 and tuple(int(x) for x in _m2.groups()) < (3, 3, 1):
                     _old_tv = _triton_chk.__version__
-                    print(f"[Trellis2] Blackwell: triton-windows {_old_tv} < 3.3.1 — auto-upgrading...")
+                    print(f"[hy3dgguf] Blackwell: triton-windows {_old_tv} < 3.3.1 — auto-upgrading...")
                     import subprocess as _sp2
                     import platform as _plat2
                     _venv_pip = _EXTENSION_DIR / "venv" / (
@@ -522,17 +522,17 @@ class Trellis2GGUFGenerator(BaseGenerator):
                                 if _k == "triton" or _k.startswith("triton."):
                                     sys.modules.pop(_k, None)
                             import triton as _triton_new
-                            print(f"[Trellis2] Blackwell: triton-windows upgraded "
+                            print(f"[hy3dgguf] Blackwell: triton-windows upgraded "
                                   f"{_old_tv} -> {_triton_new.__version__}")
                             return
                         else:
-                            print(f"[Trellis2] Blackwell: triton-windows upgrade failed:\n{_r.stderr.strip()}")
+                            print(f"[hy3dgguf] Blackwell: triton-windows upgrade failed:\n{_r.stderr.strip()}")
                     else:
-                        print(f"[Trellis2] Blackwell: venv pip not found at {_venv_pip}.")
+                        print(f"[hy3dgguf] Blackwell: venv pip not found at {_venv_pip}.")
             except Exception as _e2:
-                print(f"[Trellis2] Blackwell: could not auto-upgrade triton-windows ({_e2}).")
+                print(f"[hy3dgguf] Blackwell: could not auto-upgrade triton-windows ({_e2}).")
 
-        print("[Trellis2] Blackwell: no working ptxas or backend found. "
+        print("[hy3dgguf] Blackwell: no working ptxas or backend found. "
               "Install CUDA Toolkit 12.8+ from https://developer.nvidia.com/cuda-downloads "
               "or run a Repair in Modly to reinstall with triton-windows >= 3.3.1.")
 
@@ -540,7 +540,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         """
         Test cumesh.remeshing.remesh_narrow_band_dc with a tiny mesh.
 
-        setup.py used to overwrite cumesh/remeshing.py with the trellis2_gguf patch,
+        setup.py used to overwrite cumesh/remeshing.py with the hy3dgguf_gguf patch,
         replacing the original function and leaving hashmap_vox undefined.
         If that's the case, try to locate hashmap_vox in cumesh's own namespace
         (or its C extension) and inject it — fixing existing installs without a Repair.
@@ -579,13 +579,13 @@ class Trellis2GGUFGenerator(BaseGenerator):
             try:
                 _probe()
                 self._cumesh_remesh_ok = True
-                print("[Trellis2] cumesh remesh: OK")
+                print("[hy3dgguf] cumesh remesh: OK")
                 return
             except NameError as ne:
                 # Extract the missing symbol name from the NameError message
                 msg = str(ne)
                 sym = msg.split("'")[1] if "'" in msg else msg.split()[-1].strip("'\"")
-                print(f"[Trellis2] cumesh remesh broken ({ne}) — attempting runtime fix...")
+                print(f"[hy3dgguf] cumesh remesh broken ({ne}) — attempting runtime fix...")
 
                 # Search cumesh top-level and cumesh._C for the missing symbol
                 fixed = False
@@ -593,7 +593,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
                     for attr in dir(ns_obj):
                         if sym.lower() in attr.lower():
                             setattr(_crm, sym, getattr(ns_obj, attr))
-                            print(f"[Trellis2] Injected {ns_name}.{attr} -> cumesh.remeshing.{sym}")
+                            print(f"[hy3dgguf] Injected {ns_name}.{attr} -> cumesh.remeshing.{sym}")
                             fixed = True
                             break
                     if fixed:
@@ -606,20 +606,20 @@ class Trellis2GGUFGenerator(BaseGenerator):
                         if hasattr(_cc, sym):
                             setattr(_crm, sym, getattr(_cc, sym))
                             fixed = True
-                            print(f"[Trellis2] Injected cumesh._C.{sym} -> cumesh.remeshing.{sym}")
+                            print(f"[hy3dgguf] Injected cumesh._C.{sym} -> cumesh.remeshing.{sym}")
                         else:
                             for attr in dir(_cc):
                                 if sym.lower() in attr.lower():
                                     setattr(_crm, sym, getattr(_cc, attr))
                                     fixed = True
-                                    print(f"[Trellis2] Injected cumesh._C.{attr} -> cumesh.remeshing.{sym}")
+                                    print(f"[hy3dgguf] Injected cumesh._C.{attr} -> cumesh.remeshing.{sym}")
                                     break
                     except ImportError:
                         pass
 
                 if not fixed:
                     print(
-                        "[Trellis2] Could not auto-fix cumesh remesh. "
+                        "[hy3dgguf] Could not auto-fix cumesh remesh. "
                         "Click Repair on the Models page to reinstall the extension."
                     )
                     return
@@ -628,36 +628,36 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 try:
                     _probe()
                     self._cumesh_remesh_ok = True
-                    print("[Trellis2] cumesh remesh: fixed and verified OK")
+                    print("[hy3dgguf] cumesh remesh: fixed and verified OK")
                 except Exception as e2:
-                    print(f"[Trellis2] cumesh remesh still broken after fix ({e2}). Click Repair.")
+                    print(f"[hy3dgguf] cumesh remesh still broken after fix ({e2}). Click Repair.")
 
         except Exception as exc:
-            print(f"[Trellis2] cumesh remesh probe failed ({exc})")
+            print(f"[hy3dgguf] cumesh remesh probe failed ({exc})")
 
     def _load_pipeline(self, gguf_quant: str) -> None:
         import os
-        from trellis2_gguf.pipelines import Trellis2ImageTo3DPipeline
+        from hy3dgguf_gguf.pipelines import hy3dggufImageTo3DPipeline
         import torch
 
         # Safety net: if attention/config.py was imported elsewhere before our
         # ATTN_BACKEND env default took effect, force SDPA now (flash_attn is absent).
         try:
-            from trellis2_gguf.modules.attention import config as _attn_cfg
+            from hy3dgguf_gguf.modules.attention import config as _attn_cfg
             if _attn_cfg.BACKEND == "flash_attn":
                 _attn_cfg.BACKEND = "sdpa"
-                print("[Trellis2] Attention backend forced to sdpa (flash_attn unavailable)")
+                print("[hy3dgguf] Attention backend forced to sdpa (flash_attn unavailable)")
         except Exception as _exc:
-            print(f"[Trellis2] Warning: could not set attention backend: {_exc}")
+            print(f"[hy3dgguf] Warning: could not set attention backend: {_exc}")
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[Trellis2GGUFGenerator] Loading pipeline (GGUF {gguf_quant}) on {device} ...")
+        print(f"[hy3dggufGGUFGenerator] Loading pipeline (GGUF {gguf_quant}) on {device} ...")
 
         if device == "cuda":
             self._apply_blackwell_patch(torch)
             self._probe_cumesh_remesh()
 
-        pipeline = Trellis2ImageTo3DPipeline.from_pretrained(
+        pipeline = hy3dggufImageTo3DPipeline.from_pretrained(
             str(self._weights_dir),
             keep_models_loaded=False,  # free sub-models between stages to save VRAM
             enable_gguf=True,
@@ -676,35 +676,35 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 local_dir = self._prepare_dinov3_dir()
                 if local_dir:
                     args["model_name"] = local_dir
-                    print(f"[Trellis2] DINOv3 -> {local_dir}")
+                    print(f"[hy3dgguf] DINOv3 -> {local_dir}")
                 else:
                     # Last resort: let HF download from hub
                     args["model_name"] = "facebook/dinov3-vitl16-pretrain-lvd1689m"
-                    print("[Trellis2] DINOv3 -> HuggingFace download fallback")
+                    print("[hy3dgguf] DINOv3 -> HuggingFace download fallback")
 
         # DINOv3ViTModel.from_pretrained loads weights on CPU by default, but
         # DinoV3FeatureExtractor.__call__ always sends the input tensor to CUDA.
         # Patch extract_features at the class level so the model follows the input.
         if device == "cuda":
             try:
-                from trellis2_gguf.modules.image_feature_extractor import DinoV3FeatureExtractor
+                from hy3dgguf_gguf.modules.image_feature_extractor import DinoV3FeatureExtractor
                 _orig_extract = DinoV3FeatureExtractor.extract_features
                 def _extract_on_input_device(self, image: "torch.Tensor"):
                     self.model.to(image.device)
                     return _orig_extract(self, image)
                 DinoV3FeatureExtractor.extract_features = _extract_on_input_device
-                print("[Trellis2] Patched DinoV3FeatureExtractor.extract_features for CUDA")
+                print("[hy3dgguf] Patched DinoV3FeatureExtractor.extract_features for CUDA")
             except Exception as exc:
-                print(f"[Trellis2] Warning: could not patch DinoV3FeatureExtractor: {exc}")
+                print(f"[hy3dgguf] Warning: could not patch DinoV3FeatureExtractor: {exc}")
 
         # from_pretrained hardcodes pipeline._device = 'cpu' — override it.
         pipeline._device = device
-        print(f"[Trellis2] Pipeline device set to: {device}")
+        print(f"[hy3dgguf] Pipeline device set to: {device}")
 
         self._model      = pipeline
         self._device     = device
         self._gguf_quant = gguf_quant
-        print(f"[Trellis2GGUFGenerator] Ready.")
+        print(f"[hy3dggufGGUFGenerator] Ready.")
 
     def unload(self) -> None:
         self._device     = None
@@ -738,9 +738,9 @@ class Trellis2GGUFGenerator(BaseGenerator):
         # --- Reload if quantisation changed since last call ---
         gguf_quant = str(params.get("gguf_quant", "Q5_K_M"))
         if self._model is not None and getattr(self, "_gguf_quant", None) != gguf_quant:
-            print(f"[Trellis2GGUFGenerator] gguf_quant changed -> reloading ({gguf_quant})")
+            print(f"[hy3dggufGGUFGenerator] gguf_quant changed -> reloading ({gguf_quant})")
             self.unload()
-            self._ensure_trellis2_gguf()
+            self._ensure_hy3dgguf_gguf()
             self._load_pipeline(gguf_quant)
 
         pipeline_type     = str(params.get("pipeline_type",     "1024_cascade"))
@@ -821,7 +821,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         progress_cb: Optional[Callable[[int, str], None]] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> Path:
-        """Texture an existing GLB mesh using Trellis2's native SLaT texture pipeline."""
+        """Texture an existing GLB mesh using hy3dgguf's native SLaT texture pipeline."""
         import torch
         import trimesh
 
@@ -852,10 +852,10 @@ class Trellis2GGUFGenerator(BaseGenerator):
         mesh = trimesh.load(mesh_path, force="mesh")
         if not isinstance(mesh, trimesh.Trimesh):
             raise ValueError(f"Could not load a valid mesh from: {mesh_path}")
-        print(f"[Trellis2GGUFGenerator] Loaded mesh: {len(mesh.vertices)} verts, {len(mesh.faces)} faces")
+        print(f"[hy3dggufGGUFGenerator] Loaded mesh: {len(mesh.vertices)} verts, {len(mesh.faces)} faces")
 
         # --- Pre-process image ---
-        # force_cpu=True: the Trellis2 pipeline is already loaded in VRAM.
+        # force_cpu=True: the hy3dgguf pipeline is already loaded in VRAM.
         # rembg's onnxruntime CUDA provider crashes with error 700 under VRAM
         # pressure, corrupting the PyTorch CUDA context for all subsequent calls.
         self._report(progress_cb, 8, "Removing background...")
@@ -891,7 +891,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         self._check_cancelled(cancel_event)
 
         # Trimesh's PBRMaterial defaults metallicFactor=1.0 which renders black
-        # in viewers without IBL. Trellis2 bakes color only, so reset to diffuse.
+        # in viewers without IBL. hy3dgguf bakes color only, so reset to diffuse.
         try:
             _meshes = list(out_mesh.geometry.values()) if hasattr(out_mesh, 'geometry') else [out_mesh]
             for _m in _meshes:
@@ -998,13 +998,13 @@ class Trellis2GGUFGenerator(BaseGenerator):
                 except Exception:
                     pass
                 cm.init(_rv, _rf)
-                print("[Trellis2GGUFGenerator] Remesh OK")
+                print("[hy3dggufGGUFGenerator] Remesh OK")
             except Exception as remesh_exc:
                 # Root cause: setup.py's _apply_patches used to overwrite cumesh's
-                # own remeshing.py with trellis2_gguf's patch, which references
+                # own remeshing.py with hy3dgguf_gguf's patch, which references
                 # hashmap_vox without importing it (NameError). Fixed in setup.py;
                 # reinstalling the extension (Repair) restores cumesh's remeshing.py.
-                print(f"[Trellis2GGUFGenerator] cumesh remesh unavailable ({remesh_exc}), using fallback...")
+                print(f"[hy3dggufGGUFGenerator] cumesh remesh unavailable ({remesh_exc}), using fallback...")
                 _torch.cuda.empty_cache()
                 # Try pymeshlab for hole-filling — handles structural holes better
                 # than CuMesh.fill_holes for FDG meshes with missing boundary voxels.
@@ -1021,9 +1021,9 @@ class Trellis2GGUFGenerator(BaseGenerator):
                     _pm = ms.current_mesh()
                     _vt = _torch.from_numpy(_pm.vertex_matrix().astype(np.float32)).cuda().contiguous()
                     _ft = _torch.from_numpy(_pm.face_matrix().astype(np.int32)).cuda().contiguous()
-                    print("[Trellis2GGUFGenerator] pymeshlab repair applied")
+                    print("[hy3dggufGGUFGenerator] pymeshlab repair applied")
                 except Exception as pml_exc:
-                    print(f"[Trellis2GGUFGenerator] pymeshlab unavailable ({pml_exc}), using fill_holes")
+                    print(f"[hy3dggufGGUFGenerator] pymeshlab unavailable ({pml_exc}), using fill_holes")
                 cm = CuMesh()
                 cm.init(_vt, _ft)
                 cm.fill_holes(max_hole_perimeter=3e-2)
@@ -1039,7 +1039,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
             faces = _fout.cpu().numpy().astype(np.int32)
             _cumesh_ok = True
         except Exception as exc:
-            print(f"[Trellis2GGUFGenerator] cumesh cleanup failed ({exc}), using centroid winding fix")
+            print(f"[hy3dggufGGUFGenerator] cumesh cleanup failed ({exc}), using centroid winding fix")
             v0, v1, v2 = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
             face_normals   = np.cross(v1 - v0, v2 - v0)
             face_centroids = (v0 + v1 + v2) / 3.0
@@ -1081,7 +1081,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         _y_min, _y_max = float(verts[:, 1].min()), float(verts[:, 1].max())
         _cap = (np.abs(_fn[:, 1]) > 0.97) & (_yc < _y_min + (_y_max - _y_min) * 0.02)
         if _cap.any():
-            print(f"[Trellis2GGUFGenerator] Stripped {_cap.sum()} ground cap faces")
+            print(f"[hy3dggufGGUFGenerator] Stripped {_cap.sum()} ground cap faces")
             faces = faces[~_cap]
 
         self.outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -1128,15 +1128,15 @@ class Trellis2GGUFGenerator(BaseGenerator):
             "Scripts/pip.exe" if platform.system() == "Windows" else "bin/pip"
         )
         if not pip.exists():
-            print(f"[Trellis2] WARNING: cannot auto-install {missing} — venv pip not found")
+            print(f"[hy3dgguf] WARNING: cannot auto-install {missing} — venv pip not found")
             return
 
-        print(f"[Trellis2] Auto-installing missing packages: {missing}")
+        print(f"[hy3dgguf] Auto-installing missing packages: {missing}")
         try:
             _sp.run([str(pip), "install", *missing], check=True, timeout=120)
-            print(f"[Trellis2] Installed: {missing}")
+            print(f"[hy3dgguf] Installed: {missing}")
         except Exception as exc:
-            print(f"[Trellis2] WARNING: failed to install {missing}: {exc}")
+            print(f"[hy3dgguf] WARNING: failed to install {missing}: {exc}")
 
     def _patch_o_voxel_convert(self) -> None:
         """Inject tiled_flexible_dual_grid_to_mesh into o_voxel.convert if missing.
@@ -1156,11 +1156,11 @@ class Trellis2GGUFGenerator(BaseGenerator):
             import sys
 
             for _sp in sys.path:
-                _pf = Path(_sp) / "trellis2_gguf_patch" / "flexible_dual_grid.py"
+                _pf = Path(_sp) / "hy3dgguf_gguf_patch" / "flexible_dual_grid.py"
                 if _pf.exists():
                     patch_text = _pf.read_text(encoding="utf-8")
                     if "tiled_flexible_dual_grid_to_mesh" not in patch_text:
-                        print("[Trellis2] WARNING: patch/flexible_dual_grid.py has no "
+                        print("[hy3dgguf] WARNING: patch/flexible_dual_grid.py has no "
                               "tiled_flexible_dual_grid_to_mesh. Click Repair.")
                         return
 
@@ -1187,24 +1187,24 @@ class Trellis2GGUFGenerator(BaseGenerator):
                                 except ImportError:
                                     ns["tqdm"] = lambda _it, *a, **k: _it
                             exec(compile(func_src, str(_pf), "exec"), ns)  # noqa: S102
-                            print("[Trellis2] Injected tiled_flexible_dual_grid_to_mesh "
+                            print("[hy3dgguf] Injected tiled_flexible_dual_grid_to_mesh "
                                   "into o_voxel.convert")
                             return
 
-                    print("[Trellis2] WARNING: AST scan found no "
+                    print("[hy3dgguf] WARNING: AST scan found no "
                           "tiled_flexible_dual_grid_to_mesh in patch file.")
                     return
 
-            print("[Trellis2] WARNING: trellis2_gguf_patch/flexible_dual_grid.py not found — "
+            print("[hy3dgguf] WARNING: hy3dgguf_gguf_patch/flexible_dual_grid.py not found — "
                   "tiled_flexible_dual_grid_to_mesh missing. Click Repair.")
         except ImportError:
             pass  # o_voxel not yet installed — setup.py will handle it
         except Exception as exc:
-            print(f"[Trellis2] WARNING: could not patch o_voxel.convert: {exc}")
+            print(f"[hy3dgguf] WARNING: could not patch o_voxel.convert: {exc}")
 
     def _ensure_comfyui_gguf(self) -> None:
         """
-        Ensure ComfyUI-GGUF (city96) files are present at the path that trellis2_gguf's
+        Ensure ComfyUI-GGUF (city96) files are present at the path that hy3dgguf_gguf's
         _setup_native_gguf() searches.  Without these, GGUF dequant falls back to CPU.
         """
         import urllib.request
@@ -1212,7 +1212,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         sp = self._venv_site_packages()
         if sp is None:
             return
-        # _setup_native_gguf() searches trellis2_gguf/utils/../../../ComfyUI-GGUF,
+        # _setup_native_gguf() searches hy3dgguf_gguf/utils/../../../ComfyUI-GGUF,
         # i.e. <site-packages>/../ComfyUI-GGUF. Derive it the same way setup.py does
         # so Windows (<venv>/Lib) and Linux (<venv>/lib/pythonX.Y) stay in sync.
         gguf_dir = sp.parent / "ComfyUI-GGUF"
@@ -1227,22 +1227,22 @@ class Trellis2GGUFGenerator(BaseGenerator):
             dest = gguf_dir / fname
             if dest.exists():
                 continue
-            print(f"[Trellis2] Downloading ComfyUI-GGUF/{fname} …")
+            print(f"[hy3dgguf] Downloading ComfyUI-GGUF/{fname} …")
             try:
                 urllib.request.urlretrieve(base + fname, str(dest))
             except Exception as exc:
-                print(f"[Trellis2] Warning: could not download {fname}: {exc}")
-        print(f"[Trellis2] ComfyUI-GGUF installed at {gguf_dir}")
+                print(f"[hy3dgguf] Warning: could not download {fname}: {exc}")
+        print(f"[hy3dgguf] ComfyUI-GGUF installed at {gguf_dir}")
 
-    def _ensure_trellis2_gguf(self) -> None:
-        """Assert that trellis2_gguf is importable from the venv (installed by setup.py)."""
+    def _ensure_hy3dgguf_gguf(self) -> None:
+        """Assert that hy3dgguf_gguf is importable from the venv (installed by setup.py)."""
         import sys
         import types
         import torch  # noqa — registers CUDA DLLs on Windows before any CUDA extension
 
         self._ensure_comfyui_gguf()
 
-        # trellis2_gguf is a ComfyUI extension; stub ComfyUI-specific modules
+        # hy3dgguf_gguf is a ComfyUI extension; stub ComfyUI-specific modules
         # so it can be used standalone.
         def _stub(name: str, **attrs):
             if name not in sys.modules:
@@ -1267,10 +1267,10 @@ class Trellis2GGUFGenerator(BaseGenerator):
         _stub("comfy.utils", ProgressBar=_ProgressBar)
         _stub("comfy", utils=sys.modules["comfy.utils"])
 
-        # trellis2_gguf/models/__init__.py dynamically loads model_manager.py from
+        # hy3dgguf_gguf/models/__init__.py dynamically loads model_manager.py from
         # site-packages (a ComfyUI-specific file).  Pre-inject a stub so the file
         # lookup is skipped entirely.
-        if "trellis2_model_manager" not in sys.modules:
+        if "hy3dgguf_model_manager" not in sys.modules:
             import glob as _glob
             import os as _os
 
@@ -1308,9 +1308,9 @@ class Trellis2GGUFGenerator(BaseGenerator):
                                 config_file = _os.path.join(_os.path.dirname(model_file), basename + ".json")
                             if _os.path.exists(config_file):
                                 if quant != gguf_quant:
-                                    print(f"[Trellis2] 512 texture model: using Q8_0 instead of {gguf_quant} (upstream K-quant corruption)")
+                                    print(f"[hy3dgguf] 512 texture model: using Q8_0 instead of {gguf_quant} (upstream K-quant corruption)")
                                 elif len(quants) > 1:
-                                    print(f"[Trellis2] WARNING: Q8_0 512 texture model not found; {gguf_quant} may produce corrupt textures")
+                                    print(f"[hy3dgguf] WARNING: Q8_0 512 texture model not found; {gguf_quant} may produce corrupt textures")
                                 return config_file, model_file, True
                 suf     = f"_{precision}" if precision else ""
                 pattern = _os.path.join(_search_root, "**", f"{basename}{suf}.safetensors")
@@ -1327,16 +1327,16 @@ class Trellis2GGUFGenerator(BaseGenerator):
                         config_file = _os.path.join(_os.path.dirname(model_file), basename + ".json")
                     return config_file, model_file, False
                 raise FileNotFoundError(
-                    f"[Trellis2] Cannot resolve model: {basename} "
+                    f"[hy3dgguf] Cannot resolve model: {basename} "
                     f"(gguf={enable_gguf}, quant={gguf_quant}, precision={precision}) "
                     f"in {_search_root}"
                 )
 
-            mm = types.ModuleType("trellis2_model_manager")
+            mm = types.ModuleType("hy3dgguf_model_manager")
             mm.resolve_local_path  = _resolve_local_path
             mm.ensure_model_files  = lambda: None
-            sys.modules["trellis2_model_manager"] = mm
-            print(f"[Trellis2] Injected trellis2_model_manager stub (search root: {_search_root})")
+            sys.modules["hy3dgguf_model_manager"] = mm
+            print(f"[hy3dgguf] Injected hy3dgguf_model_manager stub (search root: {_search_root})")
 
         # huggingface_hub >=0.24 validates repo IDs strictly and rejects
         # Windows absolute paths.  Patch it to allow local paths through.
@@ -1356,15 +1356,15 @@ class Trellis2GGUFGenerator(BaseGenerator):
         # _PY_PACKAGES on older installs and o_voxel/io/ply.py imports it at module load).
         self._ensure_pip_packages(["plyfile", "zstandard", "tqdm"])
 
-        # Patch o_voxel.convert before trellis2_gguf is imported — newer versions of
+        # Patch o_voxel.convert before hy3dgguf_gguf is imported — newer versions of
         # fdg_vae.py import tiled_flexible_dual_grid_to_mesh which is absent from the wheel.
         self._patch_o_voxel_convert()
 
         try:
-            from trellis2_gguf.pipelines import Trellis2ImageTo3DPipeline  # noqa
+            from hy3dgguf_gguf.pipelines import hy3dggufImageTo3DPipeline  # noqa
         except ImportError as exc:
             raise RuntimeError(
-                "[Trellis2GGUFGenerator] trellis2_gguf not found. "
+                "[hy3dggufGGUFGenerator] hy3dgguf_gguf not found. "
                 "Click Repair on the Models page to re-run setup.py."
             ) from exc
 
@@ -1380,7 +1380,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
         """Background removal (rembg) + foreground crop.
 
         force_cpu=True avoids rembg using the CUDA onnxruntime provider, which
-        corrupts the PyTorch CUDA context when the Trellis2 pipeline is already
+        corrupts the PyTorch CUDA context when the hy3dgguf pipeline is already
         loaded and VRAM is under pressure (error 700 propagates to all subsequent
         torch.cuda calls).
         """
@@ -1401,7 +1401,7 @@ class Trellis2GGUFGenerator(BaseGenerator):
                     session = rembg.new_session(providers=["CPUExecutionProvider"])
                     image   = rembg.remove(image, session=session)
         except Exception as exc:
-            print(f"[Trellis2GGUFGenerator] Background removal skipped: {exc}")
+            print(f"[hy3dggufGGUFGenerator] Background removal skipped: {exc}")
 
         # Composite on white background
         bg = PILImage.new("RGBA", image.size, (255, 255, 255, 255))
